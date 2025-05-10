@@ -1,6 +1,6 @@
 <template>
   <div class="container">
-    <div id="paper"></div>
+    <PaperSpaceVue :graph="graph" :namespace="namespace" />
   </div>
 </template>
 
@@ -17,10 +17,12 @@ import {
   loadOversData,
   getAfterStories
 } from './services/eventService';
+import PaperSpaceVue from './components/PaperSpace.vue';
 
 export default {
   name: 'App',
   components: {
+    PaperSpaceVue,
   },
   setup() {
     const getTypeLabel = (type) => {
@@ -35,11 +37,15 @@ export default {
       return typeMap[type] || type;
     };
     
-    // 搜索和分页相关
+    // 游戏数据加载
     const allEvents = shallowRef([]);
     const allEventsCache = shallowRef({}); // 缓存所有类型的数据
     const isLoading = ref(false);
-    
+
+    // paper space
+    const namespace = shapes;
+    const graph = new dia.Graph({}, { cellNamespace: namespace });
+
     /* // 添加本地版本号
     const localVersionText =  ref(JSON.parse(localVersionInfo)?.version || '0.0.0');
 
@@ -191,20 +197,6 @@ export default {
         console.error('初始化数据失败:', e);
       }
 
-      const namespace = shapes;
-
-      const graph = new dia.Graph({}, { cellNamespace: namespace });
-
-      const paper = new dia.Paper({
-        el: document.getElementById('paper'),
-        model: graph,
-        width: '100%',
-        height: '100%',
-        background: { color: '#F5F5F5' },
-        cellViewNamespace: namespace
-      });
-      console.log(paper);
-
       const rect1 = new shapes.standard.Rectangle();
       rect1.position(25, 25);
       rect1.resize(180, 50);
@@ -220,6 +212,9 @@ export default {
     });
 
     return {
+      graph,
+      namespace,
+      PaperSpaceVue,
       getTypeLabel,
       allEvents,
       // checkVersion,
