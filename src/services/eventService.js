@@ -1534,3 +1534,79 @@ export async function getAllOverRelations() {
 export async function getAllRiteRelations() {
   return await loadRiteRelationsData();
 }
+
+const allEventsCache = {}
+/**
+ * 一次性加载所有事件数据
+ * @returns {Promise<Array>} 所有事件数据
+ */
+export async function loadAllEvents() {
+  // 加载所有类型的数据
+  const types = ['event', 'rite', 'loot'];
+  let combinedEvents = [];
+
+  // 对每种类型加载数据（使用缓存）
+  for (const type of types) {
+    if (!allEventsCache[type]) {
+      // 如果缓存中没有该类型的数据，则加载
+      const countResult = await getEventsByType(type, 1, 1);
+      const allResult = await getEventsByType(type, 1, countResult.total);
+      allEventsCache[type] = allResult.items;
+    }
+
+    // 从缓存中获取数据
+    combinedEvents = [...combinedEvents, ...allEventsCache[type]];
+  }
+
+  // 加载结局数据
+  if (!allEventsCache['over']) {
+    try {
+      const oversData = await loadOversData();
+      const overItems = Object.entries(oversData).map(([id, data]) => ({
+        id,
+        name: data.name || data.text || `结局 ${id}`,
+        text: data.text || '',
+        type: 'over'
+      }));
+      allEventsCache['over'] = overItems;
+      combinedEvents = [...combinedEvents, ...overItems];
+    } catch (e) {
+      console.error('加载结局数据失败:', e);
+    }
+  } else {
+    combinedEvents = [...combinedEvents, ...allEventsCache['over']];
+  }
+
+  // 加载卡片数据
+  if (!allEventsCache['card']) {
+    try {
+      const cardsData = await loadCardsData();
+      const cardItems = Object.entries(cardsData).map(([id, data]) => ({
+        id,
+        name: data.name || data.text || `卡片 ${id}`,
+        text: data.text || '',
+        type: 'card'
+      }));
+      allEventsCache['card'] = cardItems;
+      combinedEvents = [...combinedEvents, ...cardItems];
+    } catch (e) {
+      console.error('加载卡片数据失败:', e);
+    }
+  } else {
+    combinedEvents = [...combinedEvents, ...allEventsCache['card']];
+  }
+
+  // 加载后日谈数据
+  if (!allEventsCache['after_story']) {
+    try {
+      const afterStories = await getAfterStories();
+      allEventsCache['after_story'] = afterStories;
+      combinedEvents = [...combinedEvents, ...afterStories];
+    } catch (e) {
+      console.error('加载后日谈数据失败:', e);
+    }
+  } else {
+    combinedEvents = [...combinedEvents, ...allEventsCache['after_story']];
+  }
+  return combinedEvents;
+}

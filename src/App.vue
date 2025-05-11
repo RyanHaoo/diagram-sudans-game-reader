@@ -5,17 +5,14 @@
 </template>
 
 <script>
-import { ref, shallowRef, onMounted } from 'vue';
+import { onMounted } from 'vue';
 import { dia, shapes } from '@joint/core';
 
 // 导入本地版本信息
 // import localVersionInfo from '@/assets/version.json';
 import { 
-  loadCardsData,
   loadGameDataIndex,
-  getEventsByType,
-  loadOversData,
-  getAfterStories
+  loadAllEvents,
 } from './services/eventService';
 import PaperSpaceVue from './components/PaperSpace.vue';
 
@@ -25,22 +22,17 @@ export default {
     PaperSpaceVue,
   },
   setup() {
-    const getTypeLabel = (type) => {
-      const typeMap = {
-        'event': '事件',
-        'rite': '仪式',
-        'loot': '战利品',
-        'over': '结局',
-        'after_story': '后日谈',
-        'card': '卡牌'
-      };
-      return typeMap[type] || type;
-    };
-    
-    // 游戏数据加载
-    const allEvents = shallowRef([]);
-    const allEventsCache = shallowRef({}); // 缓存所有类型的数据
-    const isLoading = ref(false);
+    // const getTypeLabel = (type) => {
+    //   const typeMap = {
+    //     'event': '事件',
+    //     'rite': '仪式',
+    //     'loot': '战利品',
+    //     'over': '结局',
+    //     'after_story': '后日谈',
+    //     'card': '卡牌'
+    //   };
+    //   return typeMap[type] || type;
+    // };
 
     // paper space
     const namespace = shapes;
@@ -100,102 +92,19 @@ export default {
     };
     */
 
-    // 一次性加载所有事件数据
-    const loadAllEvents = async () => {
-      if (isLoading.value) return;
-      
-      isLoading.value = true;
-      try {
-        // 加载所有类型的数据
-        const types = ['event', 'rite', 'loot'];
-        let combinedEvents = [];
-        
-        // 对每种类型加载数据（使用缓存）
-        for (const type of types) {
-          if (!allEventsCache.value[type]) {
-            // 如果缓存中没有该类型的数据，则加载
-            const countResult = await getEventsByType(type, 1, 1);
-            const allResult = await getEventsByType(type, 1, countResult.total);
-            allEventsCache.value[type] = allResult.items;
-          }
-          
-          // 从缓存中获取数据
-          combinedEvents = [...combinedEvents, ...allEventsCache.value[type]];
-        }
-        
-        // 加载结局数据
-        if (!allEventsCache.value['over']) {
-          try {
-            const oversData = await loadOversData();
-            const overItems = Object.entries(oversData).map(([id, data]) => ({
-              id,
-              name: data.name || data.text || `结局 ${id}`,
-              text: data.text || '',
-              type: 'over'
-            }));
-            allEventsCache.value['over'] = overItems;
-            combinedEvents = [...combinedEvents, ...overItems];
-          } catch (e) {
-            console.error('加载结局数据失败:', e);
-          }
-        } else {
-          combinedEvents = [...combinedEvents, ...allEventsCache.value['over']];
-        }
-        
-        // 加载卡片数据
-        if (!allEventsCache.value['card']) {
-          try {
-            const cardsData = await loadCardsData();
-            const cardItems = Object.entries(cardsData).map(([id, data]) => ({
-              id,
-              name: data.name || data.text || `卡片 ${id}`,
-              text: data.text || '',
-              type: 'card'
-            }));
-            allEventsCache.value['card'] = cardItems;
-            combinedEvents = [...combinedEvents, ...cardItems];
-          } catch (e) {
-            console.error('加载卡片数据失败:', e);
-          }
-        } else {
-          combinedEvents = [...combinedEvents, ...allEventsCache.value['card']];
-        }
-        
-        // 加载后日谈数据
-        if (!allEventsCache.value['after_story']) {
-          try {
-            const afterStories = await getAfterStories();
-            allEventsCache.value['after_story'] = afterStories;
-            combinedEvents = [...combinedEvents, ...afterStories];
-          } catch (e) {
-            console.error('加载后日谈数据失败:', e);
-          }
-        } else {
-          combinedEvents = [...combinedEvents, ...allEventsCache.value['after_story']];
-        }
-
-        // 更新事件列表
-        allEvents.value = combinedEvents;
-        
-      } catch (e) {
-        console.error('加载事件数据失败:', e);
-      } finally {
-        console.log('所有事件数据加载完成:', allEvents.value);
-        isLoading.value = false;
-      }
-    };
-
     onMounted(async () => {
+      let allEvents;
       try {
         // 预加载索引文件
         await loadGameDataIndex()
-        await loadAllEvents()
+        allEvents = await loadAllEvents()
 
         // 检查版本更新
         // checkVersion();
       } catch (e) {
         console.error('初始化数据失败:', e);
       }
+      console.log('allEvents:', allEvents);
 
       const rect1 = new shapes.standard.Rectangle();
       rect1.position(25, 25);
@@ -208,15 +117,13 @@ export default {
       rect2.addTo(graph);
 
       rect1.attr('label', { text: 'Hello!', fill: '#353535' });
-      rect2.attr('label', { text: allEvents.value.length, fill: '#353535' });
+      rect2.attr('label', { text: allEvents.length, fill: '#353535' });
     });
 
     return {
       graph,
       namespace,
       PaperSpaceVue,
-      getTypeLabel,
-      allEvents,
       // checkVersion,
     };
   }
