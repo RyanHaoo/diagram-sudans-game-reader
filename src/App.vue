@@ -3,16 +3,18 @@
     <PaperSpaceVue :graph="graph" :namespace="namespace" />
   </div>
 </template>
-
 <script>
 import { onMounted } from 'vue';
 import { dia, shapes } from '@joint/core';
+import { DirectedGraph } from '@joint/layout-directed-graph';
 
 // 导入本地版本信息
 // import localVersionInfo from '@/assets/version.json';
-import { 
+import {
   loadGameDataIndex,
   loadAllEvents,
+  loadEventData,
+  getChildEventIds,
 } from './services/eventService';
 import PaperSpaceVue from './components/PaperSpace.vue';
 
@@ -22,22 +24,115 @@ export default {
     PaperSpaceVue,
   },
   setup() {
-    // const getTypeLabel = (type) => {
-    //   const typeMap = {
-    //     'event': '事件',
-    //     'rite': '仪式',
-    //     'loot': '战利品',
-    //     'over': '结局',
-    //     'after_story': '后日谈',
-    //     'card': '卡牌'
-    //   };
-    //   return typeMap[type] || type;
-    // };
+    // const typeMap = new Map([
+    //   ['event', '事件'],
+    //   ['rite', '仪式'],
+    //   ['loot', '战利品'],
+    //   ['over', '结局'],
+    //   ['after_story', '后日谈'],
+    //   ['card', '卡牌'],
+    // ]);
 
     // paper space
     const namespace = shapes;
     const graph = new dia.Graph({}, { cellNamespace: namespace });
 
+    const drawSequenceLink = (source, target) => {
+      const link = new namespace.standard.Link({
+        source: {
+          id: source.id,
+          anchor: { name: 'right' },
+          connectionPoint: { name: 'anchor'},
+        },
+        target: {
+          id: target.id,
+          anchor: { name: 'left' },
+          connectionPoint: { name: 'anchor'},
+        },
+        connector: {
+          name: 'straight',
+          args: {
+            cornerType: 'cubic',
+            cornerRadius: 20,
+          },
+        },
+        router: {
+          name: 'manhattan',
+          args: {
+            startDirections: ['right'],
+            endDirections: ['left'],
+            padding: {
+              bottom: 20,
+              top: 50,
+              right: 20,
+              left: 20,
+            },
+          }
+        },
+      });
+      link.addTo(graph);
+    };
+
+    const formatEventShape = (shape, eventData) => {
+      let text;
+      let type;
+      if (eventData.name) {
+        text = eventData.name;
+        shape.attr('root/title', eventData.text);
+        type = '事件';
+      } else {
+        text = eventData.text || '[无标题]';
+        type = '仪式';
+      }
+      if (eventData.type === 2) {
+        type = '战利品';
+      } 
+      shape.size({ width: Math.max(90, 14 * text.length + 10) });
+      shape.attr(
+        'label/text',
+        `${text}\n${type}: ${eventData.id}`);
+    };
+
+    /**
+     * 
+     * @param eventData 
+     * @param baseShape 
+     * @param {Map} visited 
+     */
+    const visualizeChildrenRecursively = async (eventData, baseShape, visited) => {
+      const childrenID = getChildEventIds(eventData);
+      if (childrenID.length === 0) return;
+
+      if (visited === undefined) {
+        visited = new Map();
+        visited.set(eventData.id, baseShape);
+      }
+
+      let unvisitedChild = []
+      for (const childID of childrenID) {
+        if (childID === eventData.id) {
+          continue;    // 不为自引用绘制链接
+        }
+        if (visited.has(childID)) {
+          const childShape = visited.get(childID);
+          drawSequenceLink(baseShape, childShape);
+        } else {
+          unvisitedChild.push(childID);
+        }
+      }
+
+      for (const childID of unvisitedChild) {
+        const childEvent = await loadEventData(childID);
+        const childShape = new namespace.standard.Rectangle({
+          size: { width: 150, height: 50 },
+        });
+        formatEventShape(childShape, childEvent);
+        childShape.addTo(graph);
+        drawSequenceLink(baseShape, childShape);
+        visited.set(childEvent.id, childShape);
+        await visualizeChildrenRecursively(childEvent, childShape, visited);
+      }
+    }
     /* // 添加本地版本号
     const localVersionText =  ref(JSON.parse(localVersionInfo)?.version || '0.0.0');
 
@@ -106,18 +201,32 @@ export default {
       }
       console.log('allEvents:', allEvents);
 
-      const rect1 = new shapes.standard.Rectangle();
-      rect1.position(25, 25);
-      rect1.resize(180, 50);
-      rect1.addTo(graph);
+      const rootEvent = await loadEventData('5300039', 'event');
+      console.log('rootEvent:', rootEvent);
 
-      const rect2 = new shapes.standard.Rectangle();
-      rect2.position(95, 225);
-      rect2.resize(180, 50);
-      rect2.addTo(graph);
+      new shapes.standard.Rectangle({
+        size: { width: 150, height: 50 },
+        position: { x: 25, y: 25 },
+        attrs: {
+          label: {
+            text: `数据加载完成\n${allEvents.length} 条`,
+          },
+        },
+      }).addTo(graph);
 
-      rect1.attr('label', { text: 'Hello!', fill: '#353535' });
-      rect2.attr('label', { text: allEvents.length, fill: '#353535' });
+      const rectRoot = new shapes.standard.Rectangle({
+        size: { width: 100, height: 50 },
+      });
+      formatEventShape(rectRoot, rootEvent);
+      rectRoot.addTo(graph);
+
+      await visualizeChildrenRecursively(rootEvent, rectRoot);
+      DirectedGraph.layout(graph, {
+        nodeSep: 50,
+        edgeSep: 50,
+        rankSep: 60,
+        rankDir: "LR",
+      });
     });
 
     return {
@@ -129,7 +238,6 @@ export default {
   }
 }
 </script>
-
 <style scoped>
 .container {
   width: 100vw;
