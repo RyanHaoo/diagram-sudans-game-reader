@@ -42,12 +42,12 @@ export default {
         source: {
           id: source.id,
           anchor: { name: 'right' },
-          connectionPoint: { name: 'anchor'},
+          connectionPoint: { name: 'anchor' },
         },
         target: {
           id: target.id,
           anchor: { name: 'left' },
-          connectionPoint: { name: 'anchor'},
+          connectionPoint: { name: 'anchor' },
         },
         connector: {
           name: 'straight',
@@ -79,14 +79,14 @@ export default {
       if (eventData.name) {
         text = eventData.name;
         shape.attr('root/title', eventData.text);
-        type = '事件';
+        type = '仪式';
       } else {
         text = eventData.text || '[无标题]';
-        type = '仪式';
+        type = '事件';
       }
       if (eventData.type === 2) {
         type = '战利品';
-      } 
+      }
       shape.size({ width: Math.max(90, 14 * text.length + 10) });
       shape.attr(
         'label/text',
